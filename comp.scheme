@@ -1,0 +1,76 @@
+(load "../inc/src/tests-driver.scm")
+
+(define (emit-program fxn)
+  (emit "  .text")
+  (emit "  .p2align 4,,15")
+  (emit "  .globl  scheme_entry")
+  (emit "  .type scheme_entry, @function")
+  (emit "scheme_entry:")
+  (emit ".LFB0:")
+  (emit "  .cfi_startproc")
+  (compile-program fxn)
+  (emit "  .cfi_endproc")
+  (emit ".LFE0:")
+  (emit "  .size scheme_entry, .-scheme_entry")
+)
+
+(define fixnum-shift 2)
+(define empty-list    #b00101111)
+(define bool-t        #b10011111)
+(define bool-f        #b00011111)
+(define char-mask     #b11111111)
+(define char-tag      #b00001111)
+(define char-shift    8)
+
+(define (immediate-rep x)
+  (cond
+    ((integer? x) (ash x fixnum-shift))
+    ((equal? '() x) empty-list) ; equivalently, (null? x)
+    ((equal? #t x) bool-t)
+    ((equal? #f x) bool-f)
+    ((char? x) (bitwise-ior (ash (char->integer x) char-shift) char-tag))
+  )
+)
+
+(define (compile-program x)
+  (emit-expr x)
+  (emit "  ret")
+)
+
+(define (immediate? x)
+  (or (integer? x) (null? x) (boolean? x) (char? x))
+)
+
+(define (primcall-op x)
+; TODO
+)
+
+(define (primcall-operand1 x)
+; TODO
+)
+
+(define (primcall? x)
+; TODO
+)
+
+(define (emit-expr x)
+  (cond
+    ((immediate? x)
+      (emit "movl $~s, %eax" (immediate-rep x)))
+    ((primcall? x)
+      (case (primcall-op x)
+        ((add1)
+          (emit-expr (primcall-operand1 x))
+          (emit "add1 $~a, %eax", (immediate-rep 1))
+    )))))
+
+(define (run-compile-clf expr)
+  (let ([p (open-output-file "clf.s" 'replace)])
+    (parameterize ([compile-port p])
+      (emit-program expr)
+    )
+    (close-output-port p)
+  )
+)
+
+(run-compile-clf #\c)

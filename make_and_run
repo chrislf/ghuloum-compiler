@@ -1,0 +1,6 @@
+#!/bin/bash -e
+
+/home/chrislf/lib/csv8.4/bin/a6le/scheme comp.scheme </dev/null
+gcc -c clf.s -o clf.o
+gcc clf.o small_driver.o -o small_driver
+./small_driver 
