@@ -42,27 +42,51 @@
 )
 
 (define (primcall-op x)
-; TODO
+  (car x)
 )
 
 (define (primcall-operand1 x)
-; TODO
+  (car (cdr x))
 )
 
 (define (primcall? x)
-; TODO
+  (and  (pair? x)
+        (member (car x)
+          '(add1 sub1 char->integer integer->char) ; cheating?
+        )
+  )
 )
 
 (define (emit-expr x)
   (cond
     ((immediate? x)
-      (emit "movl $~s, %eax" (immediate-rep x)))
+      (emit "  movl $~s, %eax" (immediate-rep x)))
     ((primcall? x)
       (case (primcall-op x)
         ((add1)
           (emit-expr (primcall-operand1 x))
-          (emit "add1 $~a, %eax", (immediate-rep 1))
-    )))))
+          (emit "  addl $~s, %eax" (immediate-rep 1))
+        )
+        ((sub1)
+          (emit-expr (primcall-operand1 x))
+          (emit "  subl $~s, %eax" (immediate-rep 1))
+        )
+        ((char->integer)
+          (emit-expr (primcall-operand1 x))
+          (emit "  shr $~s, %eax" 6)
+        )
+        ((integer->char)
+          (emit-expr (primcall-operand1 x))
+          (emit "  shl $~s, %eax" 6) ; char-shift - fixnum-shift
+          (emit "  or $~s, %eax" char-tag)
+        )
+      )
+    )
+    (else
+      (raise "ran out of expression types")
+    )
+  )
+)
 
 (define (run-compile-clf expr)
   (let ([p (open-output-file "clf.s" 'replace)])
@@ -73,4 +97,6 @@
   )
 )
 
-(run-compile-clf #\c)
+(run-compile-clf '(char->integer #\k))
+;(run-compile-clf 3)
+
