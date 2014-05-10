@@ -22,6 +22,9 @@ int main(int argc, char** argv){
     printf("#f\n");
   } else if ((val & char_mask) == char_tag) {
     printf("#\\%c\n", val >> char_shift);
+  } else {
+    printf("unknown value returned: %d\n", val);
   }
+
   return 0;
 }
