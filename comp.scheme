@@ -52,7 +52,16 @@
 (define (primcall? x)
   (and  (pair? x)
         (member (car x)
-          '(add1 sub1 char->integer integer->char zero?) ; cheating?
+          '(  add1
+              sub1
+              char->integer
+              integer->char
+              zero?
+              null?
+              not
+              integer?
+              boolean?
+           ) ; cheating?
         )
   )
 )
@@ -86,7 +95,15 @@
           (emit "  movl $0, %eax")
           (emit "  sete %al") ; conditional setting of byte to 1 based on the earlier cmpl
           (emit "  sall $7, %eax")
-          (emit "  orl $63, %eax")
+          (emit "  orl $31, %eax")
+        )
+        ((null?)
+          (emit-expr (primcall-operand1 x))
+          (emit "  cmpl $~s, %eax" empty-list)
+          (emit "  movl $0, %eax")
+          (emit "  sete %al") ; conditional setting of byte to 1 based on the earlier cmpl
+          (emit "  sall $7, %eax")
+          (emit "  orl $31, %eax")
         )
       )
     )
@@ -105,7 +122,8 @@
   )
 )
 
-(run-compile-clf '(zero? 0))
+(run-compile-clf '(null? 2))
+;(run-compile-clf '(zero? 0))
 ;(run-compile-clf '(char->integer #\k))
 ;(run-compile-clf 4)
 
