@@ -15,7 +15,11 @@
 )
 
 (define fixnum-shift 2)
+(define fixnum-mask #b11) ; do I know what I'm doing here?
+(define fixnum-tag  #b00) 
 (define empty-list    #b00101111)
+(define bool-mask     #b1111111)
+(define bool-tag      #b0011111)
 (define bool-t        #b10011111)
 (define bool-f        #b00011111)
 (define char-mask     #b11111111)
@@ -59,9 +63,10 @@
               zero?
               null?
               not
+              char?
               integer?
               boolean?
-           ) ; cheating?
+           )
         )
   )
 )
@@ -105,6 +110,33 @@
           (emit "  sall $7, %eax")
           (emit "  orl $31, %eax")
         )
+        ((char?)
+          (emit-expr (primcall-operand1 x))
+          (emit "  andl $~s, %eax" char-mask)
+          (emit "  cmpl $~s, %eax" char-tag)
+          (emit "  movl $0, %eax")
+          (emit "  sete %al")
+          (emit "  sall $7, %eax")
+          (emit "  orl $31, %eax")
+        )
+        ((integer?)
+          (emit-expr (primcall-operand1 x))
+          (emit "  andl $~s, %eax" fixnum-mask)
+          (emit "  cmpl $~s, %eax" fixnum-tag)
+          (emit "  movl $0, %eax")
+          (emit "  sete %al")
+          (emit "  sall $7, %eax")
+          (emit "  orl $31, %eax")
+        )
+        ((boolean?)
+          (emit-expr (primcall-operand1 x))
+          (emit "  andl $~s, %eax" bool-mask)
+          (emit "  cmpl $~s, %eax" bool-tag)
+          (emit "  movl $0, %eax")
+          (emit "  sete %al")
+          (emit "  sall $7, %eax")
+          (emit "  orl $31, %eax")
+        )
       )
     )
     (else
@@ -122,7 +154,11 @@
   )
 )
 
-(run-compile-clf '(null? 2))
+
+(run-compile-clf '(boolean? #f))
+;(run-compile-clf '(integer? ()))
+;(run-compile-clf '(char? #\l))
+;(run-compile-clf '(null? 2))
 ;(run-compile-clf '(zero? 0))
 ;(run-compile-clf '(char->integer #\k))
 ;(run-compile-clf 4)
