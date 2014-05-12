@@ -53,8 +53,12 @@
   (car (cdr x))
 )
 
+(define (primcall-operand2 x)
+  (car (cdr (cdr x)))
+)
+
 (define (primcall? x)
-  (and  (pair? x)
+;  (and  (pair? x) ; not any more
         (member (car x)
           '(  add1
               sub1
@@ -66,9 +70,12 @@
               char?
               integer?
               boolean?
+              +
+              -
+              *
            )
         )
-  )
+;  )
 )
 
 (define (emit-expr x)
@@ -137,6 +144,25 @@
           (emit "  sall $7, %eax")
           (emit "  orl $31, %eax")
         )
+        ((+) ; check for correct type?
+          (emit-expr (primcall-operand1 x))
+          (emit "  movl %eax, ~s(%rsp)" -4)
+          (emit-expr (primcall-operand2 x))
+          (emit "  addl ~s(%rsp), %eax" -4)
+        )
+        ((-)
+          (emit-expr (primcall-operand2 x))
+          (emit "  movl %eax, ~s(%rsp)" -4)
+          (emit-expr (primcall-operand1 x))
+          (emit "  subl ~s(%rsp), %eax" -4)
+        )
+        ((*)
+          (emit-expr (primcall-operand1 x))
+          (emit "  movl %eax, ~s(%rsp)" -4)
+          (emit-expr (primcall-operand2 x))
+          (emit "  shr $~s, %eax" fixnum-shift) ; when we multiply we have to remove the shift factor from one of the numbers, otherwise it gets doubled and our answer is *4
+          (emit "  imull ~s(%rsp), %eax" -4)
+        )
       )
     )
     (else
@@ -154,8 +180,10 @@
   )
 )
 
-
-(run-compile-clf '(boolean? #f))
+(run-compile-clf '(* 7 20))
+;(run-compile-clf '(- 1 20))
+;(run-compile-clf '(+ 1 20))
+;(run-compile-clf '(boolean? #f))
 ;(run-compile-clf '(integer? ()))
 ;(run-compile-clf '(char? #\l))
 ;(run-compile-clf '(null? 2))
