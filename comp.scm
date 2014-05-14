@@ -228,6 +228,64 @@
   (lookup x env)
 )
 
+;;; if
+
+(define unique-label
+  (let ([count 0])
+    (lambda ()
+      (let ([L (string->symbol (format "L_~s" count))])
+        (set! count (add1 count))
+        L
+      )
+    )
+  )
+)
+
+(define (emit-cmpl x reg)
+  (emit "  cmpl $~s, %~a" x reg)
+)
+
+(define (emit-je lbl)
+  (emit "  je .~s" lbl)
+)
+
+(define (emit-jmp lbl)
+  (emit "  jmp .~s" lbl)
+)
+
+(define (emit-label lbl)
+  (emit ".~s:" lbl)
+)
+
+
+(define (emit-if test conseq altern si env)
+  (let ((L0 (unique-label)) (L1 (unique-label)))
+    (emit-expr test si env)
+    (emit-cmpl (immediate-rep #f) "eax") ; what is eax?
+    (emit-je L0)
+    (emit-expr conseq si env)
+    (emit-jmp L1)
+    (emit-label L0)
+    (emit-expr altern si env)
+    (emit-label L1)
+  )
+)
+
+(define (if? x)
+  (and
+    (equal? 'if (car x))
+    (or (= 4 (length x))
+        (raise (format "invalid if expression ~s" x))
+    )
+  )
+)
+
+(define if-test cadr)
+(define if-conseq caddr)
+(define if-altern cadddr)
+
+;;; </if>
+
 (define (emit-expr x si env)
   (cond
     ((immediate? x)
@@ -241,6 +299,9 @@
     )
     ((let? x)
       (emit-let (bindings x) (let-body x) si env)
+    )
+    ((if? x)
+      (emit-if (if-test x) (if-conseq x) (if-altern x) si env)
     )
     (else
       (raise "ran out of expression types")
@@ -258,7 +319,8 @@
   )
 )
 
-(run-compile-clf '(let [(y 4) (z 5)] (+ y z)))
+(run-compile-clf '(if #f 1 0))
+;(run-compile-clf '(let [(y 4) (z 5)] (+ y z)))
 ;(run-compile-clf '(+ 1000 (* -1 (* 2 (+ 7 20)))))
 ;(run-compile-clf '(- 1 20))
 ;(run-compile-clf '(+ 1 (+ 2 20)))
