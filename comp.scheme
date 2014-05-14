@@ -38,7 +38,9 @@
 )
 
 (define (compile-program x)
-  (emit-expr x (* -1 wordsize)) ; -4 is our initial stack pointer/index
+  (emit-expr x (* -1 wordsize) '())
+  ; -4 is our initial stack pointer/index
+  ; '() is our initial (empty) environment
   (emit "  ret")
 )
 
@@ -59,7 +61,7 @@
 )
 
 (define (primcall? x)
-;  (and  (pair? x) ; not any more
+  (and  (pair? x) ; note this means precisely not a singleton list
         (member (car x)
           '(  add1
               sub1
@@ -76,31 +78,31 @@
               *
            )
         )
-;  )
+  )
 )
 
-(define (emit-primitive-call x si) ; maintain the stack index
+(define (emit-primitive-call x si env) ; maintain the stack index
   (case (primcall-op x)
     ((add1)
-      (emit-expr (primcall-operand1 x) si)  ;; aren't we potentially clobbering computations
+      (emit-expr (primcall-operand1 x) si env)  ;; aren't we potentially clobbering computations
                                          ;; lower down the stack here?
       (emit "  addl $~s, %eax" (immediate-rep 1))
     )
     ((sub1)
-      (emit-expr (primcall-operand1 x) si)
+      (emit-expr (primcall-operand1 x) si env)
       (emit "  subl $~s, %eax" (immediate-rep 1))
     )
     ((char->integer)
-      (emit-expr (primcall-operand1 x) si)
+      (emit-expr (primcall-operand1 x) si env)
       (emit "  shr $~s, %eax" 6)
     )
     ((integer->char)
-      (emit-expr (primcall-operand1 x) si)
+      (emit-expr (primcall-operand1 x) si env)
       (emit "  shl $~s, %eax" 6) ; char-shift - fixnum-shift
       (emit "  or $~s, %eax" char-tag)
     )
     ((zero?)
-      (emit-expr (primcall-operand1 x) si)
+      (emit-expr (primcall-operand1 x) si env)
       (emit "  cmpl $0, %eax")
       (emit "  movl $0, %eax")
       (emit "  sete %al") ; conditional setting of byte to 1 based on the earlier cmpl
@@ -108,7 +110,7 @@
       (emit "  orl $31, %eax")
     )
     ((null?)
-      (emit-expr (primcall-operand1 x) si)
+      (emit-expr (primcall-operand1 x) si env)
       (emit "  cmpl $~s, %eax" empty-list)
       (emit "  movl $0, %eax")
       (emit "  sete %al") ; conditional setting of byte to 1 based on the earlier cmpl
@@ -116,7 +118,7 @@
       (emit "  orl $31, %eax")
     )
     ((char?)
-      (emit-expr (primcall-operand1 x) si)
+      (emit-expr (primcall-operand1 x) si env)
       (emit "  andl $~s, %eax" char-mask)
       (emit "  cmpl $~s, %eax" char-tag)
       (emit "  movl $0, %eax")
@@ -125,7 +127,7 @@
       (emit "  orl $31, %eax")
     )
     ((integer?)
-      (emit-expr (primcall-operand1 x) si)
+      (emit-expr (primcall-operand1 x) si env)
       (emit "  andl $~s, %eax" fixnum-mask)
       (emit "  cmpl $~s, %eax" fixnum-tag)
       (emit "  movl $0, %eax")
@@ -134,7 +136,7 @@
       (emit "  orl $31, %eax")
     )
     ((boolean?)
-      (emit-expr (primcall-operand1 x) si)
+      (emit-expr (primcall-operand1 x) si env)
       (emit "  andl $~s, %eax" bool-mask)
       (emit "  cmpl $~s, %eax" bool-tag)
       (emit "  movl $0, %eax")
@@ -143,29 +145,32 @@
       (emit "  orl $31, %eax")
     )
     ((+) ; check for correct type?
-      (emit-expr (primcall-operand1 x) si)
+      (emit-expr (primcall-operand1 x) si env)
       (emit "  movl %eax, ~s(%rsp)" si)
       (emit-expr
         (primcall-operand2 x)
         (- si wordsize) ; going down/up the stack (depending on how you look at it)
+        env
       )
       (emit "  addl ~s(%rsp), %eax" si)
     )
     ((-)
-      (emit-expr (primcall-operand2 x) si)
+      (emit-expr (primcall-operand2 x) si env)
       (emit "  movl %eax, ~s(%rsp)" si)
       (emit-expr
         (primcall-operand1 x)
         (- si wordsize)
+        env
       )
       (emit "  subl ~s(%rsp), %eax" si)
     )
     ((*)
-      (emit-expr (primcall-operand1 x) si)
+      (emit-expr (primcall-operand1 x) si env)
       (emit "  movl %eax, ~s(%rsp)" si)
       (emit-expr
         (primcall-operand2 x)
         (- si wordsize)
+        env
       )
       (emit "  shr $~s, %eax" fixnum-shift) ; when we multiply we have to remove the shift factor from one of the numbers, otherwise it gets doubled and our answer is *4
       (emit "  imull ~s(%rsp), %eax" si)
@@ -173,19 +178,76 @@
   )
 )
 
-(define (emit-expr x si) ; also need to maintain the stack index here
+(define (extend var si env)
+  (cons (list var si) env)
+)
+
+(define (lookup var env)
+  (cond
+    ((assv var env) => cadr)
+    (else #f)
+  )
+)
+
+;(define carp car)
+;
+;(define (car x)
+;  (write (format "~s~%" x))
+;  (carp x))
+
+(define (let? x)
+  (and
+    (equal? (car x) 'let)
+    ;(alist? (cadr x)) ; alas this function is not defined in Petite
+  )
+)
+
+(define empty-env '())
+(define lhs car)
+(define (rhs x) (car (cdr x)))
+(define (bindings x) (car (cdr x)))
+; TODO allow more than one statement in the body
+; (because Scheme allows this, rather than because it is a good idea)
+(define (let-body x) (car (cdr (cdr x))))
+
+(define (emit-let bindings body si env)
+  (let f ((b* bindings) (new-env env) (si si))
+    (cond
+      ((null? b*)
+        (emit-expr body si new-env))
+      (else
+        (let ((b (car b*)))
+          (emit-expr (rhs b) si env)
+          (emit "movl %eax, ~s(%rsp)" si)
+          (f (cdr b*)
+              (extend (lhs b) si new-env) ; Note Extremely Well: env is a list of mappings from symbols to *stack locations*
+              (- si wordsize)
+))))))
+
+(define (variable? x env)
+  (lookup x env)
+)
+
+(define (emit-expr x si env)
   (cond
     ((immediate? x)
       (emit "  movl $~s, %eax" (immediate-rep x))
     )
     ((primcall? x)
-      (emit-primitive-call x si)
+      (emit-primitive-call x si env)
+    )
+    ((variable? x env)
+      (emit "  movl ~s(%rsp), %eax" (lookup x env))
+    )
+    ((let? x)
+      (emit-let (bindings x) (let-body x) si env)
     )
     (else
       (raise "ran out of expression types")
     )
   )
 )
+
 
 (define (run-compile-clf expr)
   (let ([p (open-output-file "clf.s" 'replace)])
@@ -196,7 +258,8 @@
   )
 )
 
-(run-compile-clf '(+ 1000 (* -1 (* 2 (+ 7 20)))))
+(run-compile-clf '(let [(y 4) (z 5) (g 8)] g))
+;(run-compile-clf '(+ 1000 (* -1 (* 2 (+ 7 20)))))
 ;(run-compile-clf '(- 1 20))
 ;(run-compile-clf '(+ 1 (+ 2 20)))
 ;(run-compile-clf '(boolean? #f))

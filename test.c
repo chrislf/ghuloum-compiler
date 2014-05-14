@@ -1,3 +1,5 @@
 int scheme_entry(){
-  return 42;
+  int i = 40;
+  int j = 2;
+  return i + j;
 }
