@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #define fixnum_mask   0b11
 #define fixnum_tag    0b00
 #define fixnum_shift  2
@@ -8,10 +9,14 @@
 #define char_mask     0b11111111
 #define char_tag      0b00001111
 #define char_shift    8
-
+#define pair_mask     0b111
+#define pair_tag      0b001
 
 int main(int argc, char** argv){
-  int val = scheme_entry();
+  
+  char* heap = (char *)malloc(1024*(sizeof(char)));
+
+  unsigned int val = scheme_entry(&heap);
   if ((val & fixnum_mask) == fixnum_tag){
     printf("%d\n", val >> fixnum_shift);
   } else if (val == empty_list) {
@@ -22,6 +27,8 @@ int main(int argc, char** argv){
     printf("#f\n");
   } else if ((val & char_mask) == char_tag) {
     printf("#\\%c\n", val >> char_shift);
+  } else if ((val & pair_mask) == pair_tag) {
+    printf("Some pair\n");
   } else {
     printf("unknown value returned: %d\n", val);
   }

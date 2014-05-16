@@ -8,6 +8,7 @@
   (emit "scheme_entry:")
   (emit ".LFB0:")
   (emit "  .cfi_startproc")
+  (emit "  movq %rdi, %rbx") ; saving the address of the start of the heap in rbx 
   (compile-program fxn)
   (emit "  .cfi_endproc")
   (emit ".LFE0:")
@@ -25,7 +26,7 @@
 (define char-mask     #b11111111)
 (define char-tag      #b00001111)
 (define char-shift    8)
-(define wordsize      4) ; this might actually be 8 on x64, but it might not matter
+(define wordsize      8) ; this might actually be 8 on x64, but it might not matter
 
 (define (immediate-rep x)
   (cond
@@ -86,94 +87,94 @@
     ((add1)
       (emit-expr (primcall-operand1 x) si env)  ;; aren't we potentially clobbering computations
                                          ;; lower down the stack here?
-      (emit "  addl $~s, %eax" (immediate-rep 1))
+      (emit "  addq $~s, %rax" (immediate-rep 1))
     )
     ((sub1)
       (emit-expr (primcall-operand1 x) si env)
-      (emit "  subl $~s, %eax" (immediate-rep 1))
+      (emit "  subq $~s, %rax" (immediate-rep 1))
     )
     ((char->integer)
       (emit-expr (primcall-operand1 x) si env)
-      (emit "  shr $~s, %eax" 6)
+      (emit "  shr $~s, %rax" 6)
     )
     ((integer->char)
       (emit-expr (primcall-operand1 x) si env)
-      (emit "  shl $~s, %eax" 6) ; char-shift - fixnum-shift
-      (emit "  or $~s, %eax" char-tag)
+      (emit "  shq $~s, %rax" 6) ; char-shift - fixnum-shift
+      (emit "  or $~s, %rax" char-tag)
     )
     ((zero?)
       (emit-expr (primcall-operand1 x) si env)
-      (emit "  cmpl $0, %eax")
-      (emit "  movl $0, %eax")
-      (emit "  sete %al") ; conditional setting of byte to 1 based on the earlier cmpl
-      (emit "  sall $7, %eax")
-      (emit "  orl $31, %eax")
+      (emit "  cmpq $0, %rax")
+      (emit "  movq $0, %rax")
+      (emit "  sete %al") ; conditional setting of byte to 1 based on the earlier cmpq
+      (emit "  salq $7, %rax")
+      (emit "  orq $31, %rax")
     )
     ((null?)
       (emit-expr (primcall-operand1 x) si env)
-      (emit "  cmpl $~s, %eax" empty-list)
-      (emit "  movl $0, %eax")
-      (emit "  sete %al") ; conditional setting of byte to 1 based on the earlier cmpl
-      (emit "  sall $7, %eax")
-      (emit "  orl $31, %eax")
+      (emit "  cmpq $~s, %rax" empty-list)
+      (emit "  movq $0, %rax")
+      (emit "  sete %al") ; conditional setting of byte to 1 based on the earlier cmpq
+      (emit "  salq $7, %rax")
+      (emit "  orq $31, %rax")
     )
     ((char?)
       (emit-expr (primcall-operand1 x) si env)
-      (emit "  andl $~s, %eax" char-mask)
-      (emit "  cmpl $~s, %eax" char-tag)
-      (emit "  movl $0, %eax")
+      (emit "  andq $~s, %rax" char-mask)
+      (emit "  cmpq $~s, %rax" char-tag)
+      (emit "  movq $0, %rax")
       (emit "  sete %al")
-      (emit "  sall $7, %eax")
-      (emit "  orl $31, %eax")
+      (emit "  salq $7, %rax")
+      (emit "  orq $31, %rax")
     )
     ((integer?)
       (emit-expr (primcall-operand1 x) si env)
-      (emit "  andl $~s, %eax" fixnum-mask)
-      (emit "  cmpl $~s, %eax" fixnum-tag)
-      (emit "  movl $0, %eax")
+      (emit "  andq $~s, %rax" fixnum-mask)
+      (emit "  cmpq $~s, %rax" fixnum-tag)
+      (emit "  movq $0, %rax")
       (emit "  sete %al")
-      (emit "  sall $7, %eax")
-      (emit "  orl $31, %eax")
+      (emit "  salq $7, %rax")
+      (emit "  orq $31, %rax")
     )
     ((boolean?)
       (emit-expr (primcall-operand1 x) si env)
-      (emit "  andl $~s, %eax" bool-mask)
-      (emit "  cmpl $~s, %eax" bool-tag)
-      (emit "  movl $0, %eax")
+      (emit "  andq $~s, %rax" bool-mask)
+      (emit "  cmpq $~s, %rax" bool-tag)
+      (emit "  movq $0, %rax")
       (emit "  sete %al")
-      (emit "  sall $7, %eax")
-      (emit "  orl $31, %eax")
+      (emit "  salq $7, %rax")
+      (emit "  orq $31, %rax")
     )
     ((+) ; check for correct type?
       (emit-expr (primcall-operand1 x) si env)
-      (emit "  movl %eax, ~s(%rsp)" si)
+      (emit "  movq %rax, ~s(%rsp)" si)
       (emit-expr
         (primcall-operand2 x)
         (- si wordsize) ; going down/up the stack (depending on how you look at it)
         env
       )
-      (emit "  addl ~s(%rsp), %eax" si)
+      (emit "  addq ~s(%rsp), %rax" si)
     )
     ((-)
       (emit-expr (primcall-operand2 x) si env)
-      (emit "  movl %eax, ~s(%rsp)" si)
+      (emit "  movq %rax, ~s(%rsp)" si)
       (emit-expr
         (primcall-operand1 x)
         (- si wordsize)
         env
       )
-      (emit "  subl ~s(%rsp), %eax" si)
+      (emit "  subq ~s(%rsp), %rax" si)
     )
     ((*)
       (emit-expr (primcall-operand1 x) si env)
-      (emit "  movl %eax, ~s(%rsp)" si)
+      (emit "  movq %rax, ~s(%rsp)" si)
       (emit-expr
         (primcall-operand2 x)
         (- si wordsize)
         env
       )
-      (emit "  shr $~s, %eax" fixnum-shift) ; when we multiply we have to remove the shift factor from one of the numbers, otherwise it gets doubled and our answer is *4
-      (emit "  imull ~s(%rsp), %eax" si)
+      (emit "  shr $~s, %rax" fixnum-shift) ; when we multiply we have to remove the shift factor from one of the numbers, otherwise it gets doubled and our answer is *4
+      (emit "  imulq ~s(%rsp), %rax" si)
     )
   )
 )
@@ -188,12 +189,6 @@
     (else #f)
   )
 )
-
-;(define carp car)
-;
-;(define (car x)
-;  (write (format "~s~%" x))
-;  (carp x))
 
 (define (let? x)
   (and
@@ -218,7 +213,7 @@
       (else
         (let ((b (car b*)))
           (emit-expr (rhs b) si env)
-          (emit "movl %eax, ~s(%rsp)" si)
+          (emit "movq %rax, ~s(%rsp)" si)
           (f (cdr b*)
               (extend (lhs b) si new-env) ; Note Extremely Well: env is a list of mappings from symbols to *stack locations*
               (- si wordsize)
@@ -241,8 +236,8 @@
   )
 )
 
-(define (emit-cmpl x reg)
-  (emit "  cmpl $~s, %~a" x reg)
+(define (emit-cmpq x reg)
+  (emit "  cmpq $~s, %~a" x reg)
 )
 
 (define (emit-je lbl)
@@ -261,7 +256,7 @@
 (define (emit-if test conseq altern si env)
   (let ((L0 (unique-label)) (L1 (unique-label)))
     (emit-expr test si env)
-    (emit-cmpl (immediate-rep #f) "eax") ; what is eax?
+    (emit-cmpq (immediate-rep #f) "rax")
     (emit-je L0)
     (emit-expr conseq si env)
     (emit-jmp L1)
@@ -286,16 +281,57 @@
 
 ;;; </if>
 
+;;; heap/cons
+(define (cons? x)
+  (and
+    (equal? 'cons (car x))
+    (or (= 3 (length x))
+        (raise (format "invalid cons expression ~s" x))
+    )
+  )
+)
+
+(define (emit-cons tcar tcadr si env)
+  ; Intuition
+  ; evaluate the first form and place in rax
+  ; mov to the heap 
+  ; 
+  ; NOTE WELL: with the stack we maintained our own list 
+  ; of offsets from a base value in a register
+  ; initialised by C code. With the heap, the 
+  ; register is initialised by C but we modify it
+  ; in place as we add objects in memory. Note we do not
+  ; have garbage collection at this point so we will
+  ; eventually run out of memory for most applications
+  ;
+  ; evaluate the second form and place in rax
+  ; mov to the next location in the heap
+  ; take the address of the first location, add 1 to it
+  ; and place it in rax
+  (emit-expr tcar si env)
+  (emit "  movq %rax, 0(%rbx)")
+  (emit-expr tcadr si env)
+  (emit "  movq %rax, 4(%rbx)")
+  (emit "  movq %rbx, %rax")
+  (emit "  orq $1, %rax") ; here's our pointer to a pair
+  (emit "  addq $8, %rbx") ; bump heap pointer
+)
+
+; TODO declare cons, car and cdr as primops
+; TODO write the code to emit these
+; TODO write the C code to display the type
+;;; </pair>
+
 (define (emit-expr x si env)
   (cond
     ((immediate? x)
-      (emit "  movl $~s, %eax" (immediate-rep x))
+      (emit "  movq $~s, %rax" (immediate-rep x))
     )
     ((primcall? x)
       (emit-primitive-call x si env)
     )
     ((variable? x env)
-      (emit "  movl ~s(%rsp), %eax" (lookup x env))
+      (emit "  movq ~s(%rsp), %rax" (lookup x env))
     )
     ((let? x)
       (emit-let (bindings x) (let-body x) si env)
@@ -303,12 +339,14 @@
     ((if? x)
       (emit-if (if-test x) (if-conseq x) (if-altern x) si env)
     )
+    ((cons? x)
+      (emit-cons (cadr x) (caddr x) si env)
+    )
     (else
       (raise "ran out of expression types")
     )
   )
 )
-
 
 (define (run-compile-clf expr)
   (let ([p (open-output-file "clf.s" 'replace)])
@@ -319,7 +357,9 @@
   )
 )
 
-(run-compile-clf '(if #f 1 0))
+
+(run-compile-clf '(cons 10 20))
+;(run-compile-clf '(if #f 1 2))
 ;(run-compile-clf '(let [(y 4) (z 5)] (+ y z)))
 ;(run-compile-clf '(+ 1000 (* -1 (* 2 (+ 7 20)))))
 ;(run-compile-clf '(- 1 20))

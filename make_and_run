@@ -1,6 +1,6 @@
 #!/bin/bash -e
 
-scheme comp.scheme </dev/null
+scheme comp.scm </dev/null
 gcc -c clf.s -o clf.o
 gcc clf.o small_driver.o -o small_driver
 ./small_driver 
