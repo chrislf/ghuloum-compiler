@@ -26,7 +26,7 @@
 (define char-mask     #b11111111)
 (define char-tag      #b00001111)
 (define char-shift    8)
-(define wordsize      8) ; this might actually be 8 on x64, but it might not matter
+(define wordsize      8)
 
 (define (immediate-rep x)
   (cond
@@ -292,32 +292,47 @@
 )
 
 (define (emit-cons tcar tcadr si env)
-  ; Intuition
-  ; evaluate the first form and place in rax
-  ; mov to the heap 
-  ; 
-  ; NOTE WELL: with the stack we maintained our own list 
-  ; of offsets from a base value in a register
-  ; initialised by C code. With the heap, the 
-  ; register is initialised by C but we modify it
-  ; in place as we add objects in memory. Note we do not
-  ; have garbage collection at this point so we will
-  ; eventually run out of memory for most applications
-  ;
-  ; evaluate the second form and place in rax
-  ; mov to the next location in the heap
-  ; take the address of the first location, add 1 to it
-  ; and place it in rax
   (emit-expr tcar si env)
   (emit "  movq %rax, 0(%rbx)")
   (emit-expr tcadr si env)
-  (emit "  movq %rax, 4(%rbx)")
+  (emit "  movq %rax, 4(%rbx)") ; are we sure we want to be doing this in 4s?
   (emit "  movq %rbx, %rax")
   (emit "  orq $1, %rax") ; here's our pointer to a pair
   (emit "  addq $8, %rbx") ; bump heap pointer
 )
 
-; TODO declare cons, car and cdr as primops
+(define (car? x)
+  (and
+    (equal? 'car (car x))
+    (or (= 2 (length x))
+        (raise (format "invalid car expression ~s" x))
+    )
+  )
+)
+
+(define (emit-car pair si env) 
+  (emit-expr pair si env) ; now our pair identifier is in rax
+  (emit "  subq $1, %rax") ; our car address is just the identifier minus 1, by construction
+  (emit "  movq (%rax), %rax") ; can we do this with movq (%rax)-1 %rax?
+)
+
+(define (cdr? x)
+  (and
+    (equal? 'cdr (car x))
+    (or (= 2 (length x))
+        (raise (format "invalid cdr expression ~s" x))
+    )
+  )
+)
+
+(define (emit-cdr pair si env) 
+  (emit-expr pair si env) ; now our pair identifier is in rax
+  (emit "  addq $3, %rax") ; our cdr address is the identifier plus 3, by construction
+  (emit "  movq (%rax), %rax")
+)
+
+
+; TODO declare cons, pair?, car and cdr as primops
 ; TODO write the code to emit these
 ; TODO write the C code to display the type
 ;;; </pair>
@@ -342,6 +357,12 @@
     ((cons? x)
       (emit-cons (cadr x) (caddr x) si env)
     )
+    ((car? x)
+      (emit-car (cadr x) si env)
+    )
+    ((cdr? x)
+      (emit-cdr (cadr x) si env)
+    )
     (else
       (raise "ran out of expression types")
     )
@@ -357,8 +378,9 @@
   )
 )
 
-
-(run-compile-clf '(cons 10 20))
+(run-compile-clf '(cdr (cons 10 20)))
+;(run-compile-clf '(car (cons #t 20)))
+;(run-compile-clf '(cons 10 20))
 ;(run-compile-clf '(if #f 1 2))
 ;(run-compile-clf '(let [(y 4) (z 5)] (+ y z)))
 ;(run-compile-clf '(+ 1000 (* -1 (* 2 (+ 7 20)))))
