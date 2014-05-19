@@ -14,7 +14,11 @@
 
 int main(int argc, char** argv){
   
-  char* heap = (char *)malloc(1024*(sizeof(char)));
+  // from http://www.delorie.com/gnu/docs/glibc/libc_31.html
+  // this should return a 16-bit aligned address on x64
+  // This is not clear from the man page, so in case we need
+  // it later, this is a reminder to look at posix_memalign(3)
+  char* heap = (char *)calloc(1024, (sizeof(char)));
 
   unsigned int val = scheme_entry(&heap);
   if ((val & fixnum_mask) == fixnum_tag){
