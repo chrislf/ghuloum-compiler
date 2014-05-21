@@ -290,18 +290,35 @@
     )
   )
 )
-
+ 
+;; this doesn't work if either of the car or cdr expressions
+;; themselves allocate memory on the heap, as either the
+;; contents of the memory around 0(%rbx) will be overwritten
+;; or the value of %rbx will be bumped (potentially arbitrarily
+;; many times) by either evaluation.
+;;
+;; So it might be necessary to pass the heap pointer address in the emit
+;; function's arguments.
+;;
+;; A more cunning idea, from the inc code: use the stack to save intermediate
+;; values, then push them onto the heap at the end. Then it doesn't matter
+;; what happens to the heap pointer, as we only allocate pairs atomically
 (define (emit-cons tcar tcadr si env)
   (emit-expr tcar si env)
-  (emit "  movq %rax, 0(%rbx)")
-  (emit-expr tcadr si env)
-  (emit "  movq %rax, 4(%rbx)") ; are we sure we want to be doing this in 4s?
+  (emit "  movq %rax, ~s(%rsp)" si)
+  (emit-expr tcadr (- si wordsize) env)
+  (emit "  movq %rax, ~s(%rsp)" (- si wordsize))
+  (emit "  movq ~s(%rsp), %rax" si)
+  (emit "  movq %rax, (%rbx)")
+  (emit "  movq ~s(%rsp), %rax" (- si wordsize))
+  (emit "  movq %rax, 8(%rbx)")
   (emit "  movq %rbx, %rax")
   (emit "  orq $1, %rax") ; here's our pointer to a pair
-  (emit "  addq $8, %rbx") ; bump heap pointer
+  (emit "  addq $16, %rbx") ; bump heap pointer
 )
 
 (define (car? x)
+  ; TODO we definitely need a way to catch non-pairs here or we segfault
   (and
     (equal? 'car (car x))
     (or (= 2 (length x))
@@ -378,7 +395,9 @@
   )
 )
 
-(run-compile-clf '(cdr (cons 10 20)))
+(run-compile-clf '(cons #t #f))
+;(run-compile-clf '(cdr (cons 10 20)))
+;(run-compile-clf '(car (car (cons (cons 1 2) 3))))
 ;(run-compile-clf '(car (cons #t 20)))
 ;(run-compile-clf '(cons 10 20))
 ;(run-compile-clf '(if #f 1 2))
